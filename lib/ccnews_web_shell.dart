@@ -179,8 +179,33 @@ class _CcNewsWebShellState extends State<CcNewsWebShell>
     if (uri.host == _homeHost || uri.host.endsWith('.cc-news.netlify.app')) {
       return NavigationDecision.navigate;
     }
+    if (uri.host == 'whatsapp.com' ||
+        uri.host.endsWith('.whatsapp.com') ||
+        uri.host == 't.me' ||
+        uri.host == 'telegram.me' ||
+        uri.host.endsWith('.telegram.me')) {
+      unawaited(_openSocialChannel(uri));
+      return NavigationDecision.prevent;
+    }
     unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
     return NavigationDecision.prevent;
+  }
+
+  Future<void> _openSocialChannel(Uri uri) async {
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalNonBrowserApplication,
+      );
+      if (opened) return;
+    } catch (error) {
+      debugPrint('Could not open social channel app: $error');
+    }
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (error) {
+      debugPrint('Could not open social channel link: $error');
+    }
   }
 
   void _setSystemUiStyle(String message) {
@@ -201,7 +226,11 @@ class _CcNewsWebShellState extends State<CcNewsWebShell>
   void _applySystemUiStyle(bool useLightIcons) {
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
-        statusBarColor: _cameraOpen ? Colors.black : Colors.transparent,
+        statusBarColor: _cameraOpen
+            ? Colors.black
+            : useLightIcons
+            ? const Color(0xff141519)
+            : Colors.white,
         statusBarIconBrightness: useLightIcons
             ? Brightness.light
             : Brightness.dark,
@@ -262,6 +291,45 @@ class _CcNewsWebShellState extends State<CcNewsWebShell>
             window.__ccnewsNativeViewportTracking = true;
           }
 
+          const syncNativeVideoPlayback = () => {
+            document.querySelectorAll('.post-video-frame video, .video-feed-slide video').forEach((video) => {
+              if (video.dataset.ccnewsNativeVideoReady) return;
+              video.dataset.ccnewsNativeVideoReady = 'true';
+              video.dataset.ccnewsNativeFrame = 'false';
+              video.playsInline = true;
+              if (!video.muted) {
+                const muteButton = video.closest('.video-feed-slide')
+                  ?.querySelector('button[aria-label="Turn sound off"]')
+                  || video.closest('.post-video-frame')
+                    ?.querySelector('button[aria-label="Mute video"]');
+                muteButton?.click();
+                video.muted = true;
+              }
+              if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                video.dataset.ccnewsNativeFrame = 'true';
+              }
+              video.addEventListener('loadeddata', () => {
+                video.dataset.ccnewsNativeFrame = 'true';
+              }, { once: true });
+              video.addEventListener('error', () => {
+                video.dataset.ccnewsNativeFrame = 'error';
+              });
+              const rect = video.getBoundingClientRect();
+              if (rect.bottom > 0 && rect.top < window.innerHeight && video.paused) {
+                requestAnimationFrame(() => video.click());
+              }
+            });
+          };
+          syncNativeVideoPlayback();
+          if (!window.__ccnewsNativeVideoTracking && document.body) {
+            window.__ccnewsNativeVideoObserver = new MutationObserver(syncNativeVideoPlayback);
+            window.__ccnewsNativeVideoObserver.observe(document.body, {
+              childList: true,
+              subtree: true,
+            });
+            window.__ccnewsNativeVideoTracking = true;
+          }
+
           let nativeStyle = document.getElementById('ccnews-native-shell-style');
           if (!nativeStyle) {
             nativeStyle = document.createElement('style');
@@ -287,6 +355,80 @@ class _CcNewsWebShellState extends State<CcNewsWebShell>
                 }
                 html[data-ccnews-native-shell="true"] .news-app.is-home .news-home-tabs {
                   top: var(--ccnews-native-safe-top, 0px) !important;
+                }
+                html[data-ccnews-native-shell="true"] .post-video-frame,
+                html[data-ccnews-native-shell="true"] .video-feed-slide {
+                  background: #858585 !important;
+                }
+                html[data-ccnews-native-shell="true"] .post-video-frame:has(> video:not([data-ccnews-native-frame="true"]))::before {
+                  position: absolute;
+                  z-index: 2;
+                  top: 50%;
+                  left: 50%;
+                  width: 68px;
+                  height: 68px;
+                  border: 1px solid #ffffffa8;
+                  border-radius: 50%;
+                  background: #858585cc;
+                  content: "";
+                  pointer-events: none;
+                  transform: translate(-50%, -50%);
+                  -webkit-backdrop-filter: blur(8px);
+                  backdrop-filter: blur(8px);
+                }
+                html[data-ccnews-native-shell="true"] .post-video-frame:has(> video:not([data-ccnews-native-frame="true"]))::after {
+                  position: absolute;
+                  z-index: 2;
+                  top: 50%;
+                  left: 50%;
+                  width: 0;
+                  height: 0;
+                  border-top: 12px solid transparent;
+                  border-bottom: 12px solid transparent;
+                  border-left: 19px solid white;
+                  content: "";
+                  pointer-events: none;
+                  transform: translate(-30%, -50%);
+                }
+                html[data-ccnews-native-shell="true"] .video-feed-play {
+                  width: 72px !important;
+                  height: 72px !important;
+                  border-color: #ffffffa8 !important;
+                  background: #858585cc !important;
+                }
+                html[data-ccnews-native-shell="true"] .camera-overlay:has(.camera-ready-text) {
+                  background: #858585 !important;
+                }
+                html[data-ccnews-native-shell="true"] .camera-overlay:has(.camera-ready-text) .camera-video {
+                  visibility: hidden !important;
+                }
+                html[data-ccnews-native-shell="true"] .camera-overlay:has(.camera-ready-text)::before {
+                  position: absolute;
+                  z-index: 1;
+                  top: 50%;
+                  left: 50%;
+                  width: 112px;
+                  height: 112px;
+                  border: 4px solid #ffffffa8;
+                  border-radius: 50%;
+                  background: #858585cc;
+                  content: "";
+                  pointer-events: none;
+                  transform: translate(-50%, -50%);
+                }
+                html[data-ccnews-native-shell="true"] .camera-overlay:has(.camera-ready-text)::after {
+                  position: absolute;
+                  z-index: 1;
+                  top: 50%;
+                  left: 50%;
+                  width: 0;
+                  height: 0;
+                  border-top: 46px solid transparent;
+                  border-bottom: 46px solid transparent;
+                  border-left: 72px solid #202124;
+                  content: "";
+                  pointer-events: none;
+                  transform: translate(-30%, -50%);
                 }
                 html[data-ccnews-native-shell="true"] .news-page-header {
                   padding-top: calc(12px + var(--ccnews-native-safe-top, 0px)) !important;
