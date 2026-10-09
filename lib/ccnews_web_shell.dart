@@ -285,6 +285,9 @@ class _CcNewsWebShellState extends State<CcNewsWebShell>
                   padding-top: var(--ccnews-native-safe-top, 0px) !important;
                   box-sizing: border-box !important;
                 }
+                html[data-ccnews-native-shell="true"] .news-app.is-home .news-home-tabs {
+                  top: var(--ccnews-native-safe-top, 0px) !important;
+                }
                 html[data-ccnews-native-shell="true"] .news-page-header {
                   padding-top: calc(12px + var(--ccnews-native-safe-top, 0px)) !important;
                   min-height: calc(64px + var(--ccnews-native-safe-top, 0px)) !important;
